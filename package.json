@@ -1,0 +1,19 @@
+{
+  "name": "retro-space-shooter",
+  "version": "1.0.0",
+  "description": "A retro top-down space shooter built with Phaser.js",
+  "main": "index.js",
+  "scripts": {
+    "start": "npx http-server -p 8080 -c-1",
+    "dev": "npx http-server -p 8080 -c-1 -o"
+  },
+  "keywords": ["phaser", "game", "space-shooter", "retro"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "phaser": "^3.80.1"
+  },
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  }
+}
