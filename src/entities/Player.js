@@ -44,10 +44,20 @@ class Player extends Phaser.Physics.Arcade.Sprite {
         };
         this.spaceKey = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
 
-        // Mouse shooting
-        scene.input.on('pointerdown', () => {
-            this.shoot();
-        });
+        // Mobile controls
+        this.isMobile = Config.isMobile;
+        if (this.isMobile) {
+            // Create virtual joystick (bottom left) - smaller and closer to edge
+            this.joystick = new VirtualJoystick(scene, 80, Config.height - 80, 50);
+
+            // Create shoot button (bottom right) - smaller and closer to edge
+            this.shootButton = new ShootButton(scene, Config.width - 70, Config.height - 80, 45);
+        } else {
+            // Mouse shooting for desktop
+            scene.input.on('pointerdown', () => {
+                this.shoot();
+            });
+        }
     }
 
     update(time) {
@@ -55,32 +65,47 @@ class Player extends Phaser.Physics.Arcade.Sprite {
         let velocityX = 0;
         let velocityY = 0;
 
-        // Check arrow keys or WASD
-        if (this.cursors.left.isDown || this.wasd.left.isDown) {
-            velocityX = -1;
-        } else if (this.cursors.right.isDown || this.wasd.right.isDown) {
-            velocityX = 1;
-        }
+        if (this.isMobile && this.joystick) {
+            // Mobile: Use virtual joystick
+            const direction = this.joystick.getDirection();
+            velocityX = direction.x;
+            velocityY = direction.y;
+        } else {
+            // Desktop: Check arrow keys or WASD
+            if (this.cursors.left.isDown || this.wasd.left.isDown) {
+                velocityX = -1;
+            } else if (this.cursors.right.isDown || this.wasd.right.isDown) {
+                velocityX = 1;
+            }
 
-        if (this.cursors.up.isDown || this.wasd.up.isDown) {
-            velocityY = -1;
-        } else if (this.cursors.down.isDown || this.wasd.down.isDown) {
-            velocityY = 1;
-        }
+            if (this.cursors.up.isDown || this.wasd.up.isDown) {
+                velocityY = -1;
+            } else if (this.cursors.down.isDown || this.wasd.down.isDown) {
+                velocityY = 1;
+            }
 
-        // Normalize diagonal movement
-        if (velocityX !== 0 && velocityY !== 0) {
-            velocityX *= 0.707;
-            velocityY *= 0.707;
+            // Normalize diagonal movement
+            if (velocityX !== 0 && velocityY !== 0) {
+                velocityX *= 0.707;
+                velocityY *= 0.707;
+            }
         }
 
         // Apply acceleration
         this.setAccelerationX(velocityX * Config.player.acceleration);
         this.setAccelerationY(velocityY * Config.player.acceleration);
 
-        // Shooting with spacebar
-        if (this.spaceKey.isDown) {
-            this.shoot();
+        // Shooting
+        if (this.isMobile && this.shootButton) {
+            // Mobile: Use shoot button
+            if (this.shootButton.isDown()) {
+                this.shoot();
+            }
+        } else {
+            // Desktop: Spacebar
+            if (this.spaceKey.isDown) {
+                this.shoot();
+            }
         }
 
         // Handle invulnerability flashing

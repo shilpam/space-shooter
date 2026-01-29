@@ -4,6 +4,9 @@ const Config = {
     width: 800,
     height: 600,
 
+    // Mobile detection
+    isMobile: /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent),
+
     // Player
     player: {
         speed: 200,
