@@ -6,6 +6,7 @@ class WaveManager {
         this.enemiesInWave = 0;
         this.enemiesKilled = 0;
         this.waveActive = false;
+        this.isBossWave = false;  // Track if current wave is a boss wave
         this.waveStartDelay = 2000; // 2 seconds between waves
     }
 
@@ -23,8 +24,10 @@ class WaveManager {
         // Check if boss wave
         if (this.currentWave % Config.boss.spawnWave === 0) {
             console.log(`[WaveManager] *** BOSS WAVE DETECTED! Spawning boss... ***`);
+            this.isBossWave = true;
             this.spawnBoss();
         } else {
+            this.isBossWave = false;
             // Calculate enemy count for this wave
             const enemyCount = Config.waves.enemyCountBase +
                               (this.currentWave - 1) * Config.waves.enemyCountIncrease;
@@ -156,6 +159,12 @@ class WaveManager {
     }
 
     onEnemyKilled() {
+        // Don't count regular enemy kills during boss waves
+        if (this.isBossWave) {
+            console.log(`[WaveManager] Enemy killed during boss wave - ignoring (boss must be defeated instead)`);
+            return;
+        }
+
         this.enemiesKilled++;
         console.log(`[WaveManager] Enemy killed: ${this.enemiesKilled}/${this.enemiesInWave}, waveActive: ${this.waveActive}`);
 
@@ -167,13 +176,18 @@ class WaveManager {
     }
 
     onBossDefeated() {
+        console.log(`[WaveManager] onBossDefeated() called - wave ${this.currentWave}`);
+
         // Boss counts as completing the wave
         this.enemiesKilled = this.enemiesInWave;
         this.scene.hideBossHealthBar();
+
+        console.log(`[WaveManager] Calling completeWave()`);
         this.completeWave();
     }
 
     completeWave() {
+        console.log(`[WaveManager] completeWave() called for wave ${this.currentWave}`);
         this.waveActive = false;
 
         // Show wave complete message
@@ -189,15 +203,19 @@ class WaveManager {
         });
         text.setOrigin(0.5);
         text.setDepth(200);
+        text.setScrollFactor(0);
 
         this.scene.tweens.add({
             targets: text,
             alpha: 0,
             duration: 2000,
             onComplete: () => {
+                console.log(`[WaveManager] Wave complete tween finished, destroying text`);
                 text.destroy();
                 // Start next wave
+                console.log(`[WaveManager] Scheduling next wave in ${this.waveStartDelay}ms`);
                 this.scene.time.delayedCall(this.waveStartDelay, () => {
+                    console.log(`[WaveManager] Timer fired, starting next wave`);
                     this.startNextWave();
                 });
             }
@@ -215,6 +233,7 @@ class WaveManager {
         });
         bonusText.setOrigin(0.5);
         bonusText.setDepth(200);
+        bonusText.setScrollFactor(0);
 
         this.scene.tweens.add({
             targets: bonusText,

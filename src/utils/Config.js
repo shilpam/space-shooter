@@ -9,9 +9,9 @@ const Config = {
 
     // Player
     player: {
-        speed: 200,
-        acceleration: 600,
-        drag: 500,
+        speed: 300,
+        acceleration: 900,
+        drag: 600,
         maxLives: 3,
         maxShield: 2,
         shootDelay: 200, // milliseconds between shots

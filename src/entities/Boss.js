@@ -13,11 +13,13 @@ class Boss extends Phaser.Physics.Arcade.Sprite {
 
         this.currentPhase = 0;
         this.lastShootTime = 0;
+        this.isDestroyed = false;  // Prevent multiple destructions
 
         // Movement
         this.movementDirection = 1;
         this.startX = x;
         this.moveRange = 150;
+        this.entranceComplete = false;  // Track when entrance is done
 
         // Scale up for boss (made even bigger)
         this.setScale(3.5);
@@ -28,7 +30,13 @@ class Boss extends Phaser.Physics.Arcade.Sprite {
             targets: this,
             y: 100,
             duration: 2000,
-            ease: 'Cubic.easeOut'
+            ease: 'Cubic.easeOut',
+            onComplete: () => {
+                // Enable world bounds and mark entrance complete
+                this.setCollideWorldBounds(true);
+                this.entranceComplete = true;
+                console.log('[Boss] Entrance complete, starting horizontal movement');
+            }
         });
 
         // Projectile group
@@ -42,13 +50,17 @@ class Boss extends Phaser.Physics.Arcade.Sprite {
     preUpdate(time, delta) {
         super.preUpdate(time, delta);
 
-        // Horizontal movement
-        this.x += this.movementDirection * this.speed * delta / 1000;
+        // Only move horizontally after entrance is complete
+        if (this.entranceComplete && !this.isDestroyed) {
+            // Horizontal movement using velocity
+            this.setVelocityX(this.movementDirection * this.speed);
 
-        if (this.x < this.startX - this.moveRange) {
-            this.movementDirection = 1;
-        } else if (this.x > this.startX + this.moveRange) {
-            this.movementDirection = -1;
+            // Check boundaries and reverse direction
+            if (this.x <= this.startX - this.moveRange && this.movementDirection === -1) {
+                this.movementDirection = 1;
+            } else if (this.x >= this.startX + this.moveRange && this.movementDirection === 1) {
+                this.movementDirection = -1;
+            }
         }
 
         // Update phase based on health
@@ -75,7 +87,12 @@ class Boss extends Phaser.Physics.Arcade.Sprite {
 
     onPhaseChange(phase) {
         // Visual feedback for phase change
-        this.setTexture(`boss-${phase + 1}`);
+        const textureName = `boss-${phase + 1}`;
+
+        // Only change texture if it exists
+        if (this.scene.textures.exists(textureName)) {
+            this.setTexture(textureName);
+        }
 
         // Flash effect
         this.setTint(0xff0000);
@@ -160,12 +177,21 @@ class Boss extends Phaser.Physics.Arcade.Sprite {
     }
 
     takeDamage(damage) {
+        // Prevent damage if already destroyed
+        if (this.isDestroyed) {
+            return false;
+        }
+
         this.health -= damage;
+
+        console.log(`[Boss] Taking ${damage} damage. Health: ${this.health}/${this.maxHealth}`);
 
         // Flash white when hit
         this.setTint(0xffffff);
         this.scene.time.delayedCall(100, () => {
-            this.clearTint();
+            if (this.active) {  // Only clear tint if still active
+                this.clearTint();
+            }
         });
 
         // Update health bar
@@ -173,7 +199,9 @@ class Boss extends Phaser.Physics.Arcade.Sprite {
             this.scene.updateBossHealth(this.health, this.maxHealth);
         }
 
-        if (this.health <= 0) {
+        if (this.health <= 0 && !this.isDestroyed) {
+            console.log(`[Boss] Health depleted, exploding...`);
+            this.isDestroyed = true;
             this.explode();
             return true; // Boss destroyed
         }
@@ -182,29 +210,44 @@ class Boss extends Phaser.Physics.Arcade.Sprite {
     }
 
     explode() {
+        console.log(`[Boss] explode() called`);
+
+        // Capture references before callbacks (this will be destroyed)
+        const scene = this.scene;
+        const bossX = this.x;
+        const bossY = this.y;
+
+        // Stop all movement
+        this.setVelocity(0, 0);
+
+        // Disable boss physics immediately to prevent further collisions
+        this.setActive(false);
+        this.setVisible(false);
+        this.body.enable = false;
+
         // Epic explosion sequence
         for (let i = 0; i < 8; i++) {
-            this.scene.time.delayedCall(i * 150, () => {
+            scene.time.delayedCall(i * 150, () => {
                 const offsetX = Phaser.Math.Between(-50, 50);
                 const offsetY = Phaser.Math.Between(-50, 50);
-                const explosion = this.scene.add.sprite(
-                    this.x + offsetX,
-                    this.y + offsetY,
+                const explosion = scene.add.sprite(
+                    bossX + offsetX,
+                    bossY + offsetY,
                     'explosion1'
                 );
                 explosion.setScale(1.5);
                 explosion.play('explode');
                 explosion.on('animationcomplete', () => explosion.destroy());
 
-                this.scene.sound.play('explosion', { volume: 0.5 });
+                scene.sound.play('explosion', { volume: 0.5 });
             });
         }
 
         // Camera shake
-        this.scene.cameras.main.shake(1000, 0.015);
+        scene.cameras.main.shake(1000, 0.015);
 
         // Screen flash
-        const flash = this.scene.add.rectangle(
+        const flash = scene.add.rectangle(
             Config.width / 2,
             Config.height / 2,
             Config.width,
@@ -213,17 +256,22 @@ class Boss extends Phaser.Physics.Arcade.Sprite {
             0.6
         );
         flash.setDepth(250);
+        flash.setScrollFactor(0);  // Fix flash to camera
 
-        this.scene.tweens.add({
+        scene.tweens.add({
             targets: flash,
             alpha: 0,
-            duration: 800,
-            onComplete: () => flash.destroy()
+            duration: 500,  // Reduced from 800ms
+            ease: 'Power2',
+            onComplete: () => {
+                console.log('[Boss] Flash destroyed');
+                flash.destroy();
+            }
         });
 
         // Victory text
-        this.scene.time.delayedCall(500, () => {
-            const text = this.scene.add.text(
+        scene.time.delayedCall(500, () => {
+            const text = scene.add.text(
                 Config.width / 2,
                 Config.height / 2,
                 'BOSS DEFEATED!',
@@ -236,8 +284,9 @@ class Boss extends Phaser.Physics.Arcade.Sprite {
             );
             text.setOrigin(0.5);
             text.setDepth(200);
+            text.setScrollFactor(0);
 
-            this.scene.tweens.add({
+            scene.tweens.add({
                 targets: text,
                 scaleX: 1.3,
                 scaleY: 1.3,
@@ -248,27 +297,30 @@ class Boss extends Phaser.Physics.Arcade.Sprite {
         });
 
         // Add massive score
-        if (this.scene.scoreManager) {
+        if (scene.scoreManager) {
             // Boss score doesn't use combo, just add flat bonus
-            this.scene.scoreManager.score += this.scoreValue;
+            scene.scoreManager.score += this.scoreValue;
         }
 
-        // Notify wave manager
-        if (this.scene.waveManager) {
-            this.scene.waveManager.onBossDefeated();
-        }
+        // Notify wave manager after a delay (let effects play)
+        scene.time.delayedCall(1500, () => {
+            console.log('[Boss] Notifying wave manager of boss defeat');
+            if (scene.waveManager) {
+                scene.waveManager.onBossDefeated();
+            }
+        });
 
         // Drop guaranteed power-up
-        this.scene.time.delayedCall(200, () => {
+        scene.time.delayedCall(200, () => {
             const types = ['weapon', 'shield', 'bomb'];
             for (let type of types) {
                 const powerUp = new PowerUp(
-                    this.scene,
-                    this.x + Phaser.Math.Between(-40, 40),
-                    this.y,
+                    scene,
+                    bossX + Phaser.Math.Between(-40, 40),
+                    bossY,
                     type
                 );
-                this.scene.powerUps.add(powerUp);
+                scene.powerUps.add(powerUp);
             }
         });
 
